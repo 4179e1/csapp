@@ -491,8 +491,8 @@ so that's inoefg or INOEFG
   4010f8:       push   %r12
   4010fa:       push   %rbp
   4010fb:       push   %rbx
-  4010fc:       sub    $0x50,%rsp                   # int*[6] sa;
-                                                    # int[6] y;
+  4010fc:       sub    $0x50,%rsp                   # struct node* sa[6];
+                                                    # int y[6];
   401100:       mov    %rsp,%r13                    # int *yp1 = &y[0];
   401103:       mov    %rsp,%rsi                    # int *yp2 = &y[0];
   401106:       callq  40145c <read_six_numbers>    # read_six_numbers(input, &y)
@@ -530,7 +530,7 @@ so that's inoefg or INOEFG
 
   # 上面这一段要求输入1 2 3 4 5 6这些数字的组合，不能重复
 int[6] y;
-int *yp1 = &[0]
+int *yp1 = &y[0]
 
 
 for (i = 0; i != 6; i++) {
@@ -555,7 +555,7 @@ for (i = 0; i != 6; i++) {
 }
 
   .L2
-  401153:       lea    0x18(%rsp),%rsi              # int *sential = &y[6]  // index out of range
+  401153:       lea    0x18(%rsp),%rsi              # int *sential = &y[6]
   401158:       mov    %r14,%rax                    # int *yp = &y[0]       // %rax
   40115b:       mov    $0x7,%ecx                    # int m = 7             // %ecx
 
@@ -588,14 +588,40 @@ for (i = 0; i != 6; i++) {
   401195:       je     4011ab <phase_6+0xb7>
 
   .L7
-  401197:       mov    (%rsp,%rsi,1),%ecx           # char c = *(char*)y[i] // TODO: size 1
-  40119a:       cmp    $0x1,%ecx                    # if c <= 1: goto .L8
+  401197:       mov    (%rsp,%rsi,1),%ecx           # int x = y[i] // TODO: size 1
+  40119a:       cmp    $0x1,%ecx                    # if x <= 1: goto .L8
   40119d:       jle    401183 <phase_6+0x8f>
   40119f:       mov    $0x1,%eax                    # int j = 1
   4011a4:       mov    $0x6032d0,%edx               # long *p = &node1
   4011a9:       jmp    401176 <phase_6+0x82>        # goto .L10
+```
 
-这一段见下文，最终的效果就是把sa[]的每一项设置为node[1-6]的地址, 当输入为4 3 2 1 6 5 时, 被7减后为 3 4 5 6 1 2
+```
+这一段对应的C代码
+int *sa[6]    // 8 bytes align
+
+i = 0
+
+for (i = 0; i != 6; i++) {  // i : %esi, %rsi
+.L7
+    int x = y[i];   // 4 bytes align
+    struct node *p;
+    if x <= 1 {
+.L8
+        p = &node1
+    } else {
+        p = &node1;
+        int j = 1;
+.L10
+        do {
+            p = p->next;
+            j++;
+        } while (j != c);
+    }
+.L11
+    sa[i] = p;
+}
+
 (gdb) x/24wx 0x6032d0
 0x6032d0 <node1>:	0x0000014c	0x00000001	0x006032e0	0x00000000
 0x6032e0 <node2>:	0x000000a8	0x00000002	0x006032f0	0x00000000
@@ -603,50 +629,71 @@ for (i = 0; i != 6; i++) {
 0x603300 <node4>:	0x000002b3	0x00000004	0x00603310	0x00000000
 0x603310 <node5>:	0x000001dd	0x00000005	0x00603320	0x00000000
 0x603320 <node6>:	0x000001bb	0x00000006	0x00000000	0x00000000
+
+struct node {
+    unsigned long magic;
+    unsigned long index;
+    struct node *next;
+}
+struct node1 = { .magic=0x14c, .index=1, .next = &node2}
+struct node2 = { .magic=0x0a8, .index=2, .next = &node3}
+struct node3 = { .magic=0x39c, .index=3, .next = &node4}
+struct node4 = { .magic=0x2b3, .index=4, .next = &node5}
+struct node5 = { .magic=0x1dd, .index=5, .next = &node6}
+struct node6 = { .magic=0x1bb, .index=6, .next = NULL}
+
+最终效果就是按照某个顺序把sa设置为node[1-6]的地址，这个跟输入有关系当输入为4 3 2 1 6 5 时, 被7减后为 3 4 5 6 1 2
 (gdb) x/6gx $rsp+0x20
 0x7fffffffe310:	0x00000000006032f0	0x0000000000603300
 0x7fffffffe320:	0x0000000000603310	0x0000000000603320
 0x7fffffffe330:	0x00000000006032d0	0x00000000006032e0
 
-
-for (i = 0; i != 6; i++) {
-
-.L7
-    char c = *(char*)y[i];
-    if c <= 1 {
-.L8
-        long *p = &node1;
-
-    } else {
-        long *p = &node1;
-        int j = 1;
-.L10
-        do {
-            p++;
-            j++;
-        } while (j != c);
-    }
-
-.L11
-    sa[i] = p;
-
+即sa = {
+    &node3, 
+    &node4,
+    &node5,
+    &node6,
+    &node1,
+    &node2,
 }
+```
 
+```
   .L9
-  4011ab:       mov    0x20(%rsp),%rbx          # int *e1 = sa[0]
-  4011b0:       lea    0x28(%rsp),%rax          # int **pp =  &sa[1]
-  4011b5:       lea    0x50(%rsp),%rsi          # int **sential = &sa[6]
-  4011ba:       mov    %rbx,%rcx                # int *e2 = e1            // %rcx
+  4011ab:       mov    0x20(%rsp),%rbx          # struct node *begin = sa[0]      // %rbx
+  4011b0:       lea    0x28(%rsp),%rax          # struct node **pp = &sa[1]       // %rax
+  4011b5:       lea    0x50(%rsp),%rsi          # struct node **sential = &sa[6]  // %rsi
+  4011ba:       mov    %rbx,%rcx                # int *p = begin                  // %rcx
 
+                                                # struct node *tp;                // %rdx
   .L13
-  4011bd:       mov    (%rax),%rdx              # int *e3 = *pp           // save pb
-  4011c0:       mov    %rdx,0x8(%rcx)           # *(e2 + 1) = e3       // 
+  4011bd:       mov    (%rax),%rdx              # tp = *pp
+  4011c0:       mov    %rdx,0x8(%rcx)           # p->next = tp
   4011c4:       add    $0x8,%rax                # pp += 1
   4011c8:       cmp    %rsi,%rax                # if pp == sential: goto .L12
   4011cb:       je     4011d2 <phase_6+0xde>    
-  4011cd:       mov    %rdx,%rcx                # e2 = e3
+  4011cd:       mov    %rdx,%rcx                # p = tp
   4011d0:       jmp    4011bd <phase_6+0xc9>    # goto .L13
 
+```
+struct node *begin = sa[0]      // %rbx
+struct node **pp = &sa[1]       // %rax
+struct node **sential = &sa[6]  // %rsi
+
+struct node *p = begin          // %rcx
+struct node *tp = *pp
+
+while(1) {
+    tp = *pp;      // %rdx
+    p->next = tp;
+    pp += 1;
+    if (pp == sential)
+        continue
+    p = tp;
+} while (pp != sential)
+
+
+这一段按照输入重新调整链表
 (gdb) x/6gx $rsp+0x20
 0x7fffffffe310:	0x00000000006032f0	0x0000000000603300
 0x7fffffffe320:	0x0000000000603310	0x0000000000603320
@@ -658,21 +705,22 @@ for (i = 0; i != 6; i++) {
 0x603300 <node4>:	0x000002b3	0x00000004	0x00603310	0x00000000
 0x603310 <node5>:	0x000001dd	0x00000005	0x00603320	0x00000000
 0x603320 <node6>:	0x000001bb	0x00000006	0x006032d0	0x00000000
+```
+
 
   .L12
-  4011d2:       movq   $0x0,0x8(%rdx)           # *(e3 + 1) = 0
+  4011d2:       movq   $0x0,0x8(%rdx)           # tp->next = NULL
   4011da:       mov    $0x5,%ebp                # int i = 5
-                                                # int *e1 = sa[0]
 
   .L15
-  4011df:       mov    0x8(%rbx),%rax           # int x = *(e1 + 1)
-  4011e3:       mov    (%rax),%eax              # 
-  4011e5:       cmp    %eax,(%rbx)              # if *e1 >= x: goto 0x4011ee // (%rbx): 
-  4011e7:       jge    4011ee <phase_6+0xfa>
+  4011df:       mov    0x8(%rbx),%rax           # struct node *p = begin->next
+  4011e3:       mov    (%rax),%eax              # int magic = p->magic
+  4011e5:       cmp    %eax,(%rbx)              # if begin.magic >= magic: goto 0x4011ee // (%rbx): 
+  4011e7:       jge    4011ee <phase_6+0xfa>    # goto .L14
   4011e9:       callq  40143a <explode_bomb>
 
   .L14
-  4011ee:       mov    0x8(%rbx),%rbx           # e1 += 1
+  4011ee:       mov    0x8(%rbx),%rbx           # begin = begin.next
   4011f2:       sub    $0x1,%ebp                # i -= 1
   4011f5:       jne    4011df <phase_6+0xeb>    # if i != 0: goto .L15
 
@@ -688,6 +736,18 @@ for (i = 0; i != 6; i++) {
 ```
 
 ```
+for (i = 5; i--; i!=0) {
+    struct node *p = begin->next    // %rax
+    int magic = p->magic
+    if begin.magic >= magic {
+        begin = begin->next
+        i -= 1
+    } else {
+        explode()
+    }
+} 
+
+
 (gdb) x/24wx 0x6032d0
 0x6032d0 <node1>:	0x0000014c	0x00000001	0x006032e0	0x00000000
 0x6032e0 <node2>:	0x000000a8	0x00000002	0x006032f0	0x00000000
