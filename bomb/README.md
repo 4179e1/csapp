@@ -394,7 +394,8 @@ Dump of assembler code for function phase_5:                        # phase_5 (c
    0x0000000000401062 <+0>:	push   %rbx
    0x0000000000401063 <+1>:	sub    $0x20,%rsp
    0x0000000000401067 <+5>:	mov    %rdi,%rbx
-   0x000000000040106a <+8>:	mov    %fs:0x28,%rax                    # https://stackoverflow.com/questions/10325713/why-does-this-memory-address-fs0x28-fs0x28-have-a-random-value
+   0x000000000040106a <+8>:	mov    %fs:0x28,%rax                    # Stack Canary: https://stackoverflow.com/questions/10325713/why-does-this-memory-address-fs0x28-fs0x28-have-a-random-value
+
                                                                     # char tmp[6] ?
                                                                     # char c
                                                                     # char *pc = &c
