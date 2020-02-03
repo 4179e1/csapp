@@ -16,8 +16,8 @@ CMU的15-213课程Introduction to Computer Systems (ICS)里面有一个实验叫
 ```c
 void echo()
 {
-    char buf[4]; /* Way too small! */ gets(buf);
-    puts(buf);
+    char buf[4]; /* Way too small! */
+    gets(buf);
     puts(buf);
 }
 ```
@@ -25,13 +25,56 @@ void echo()
 当用户输入超过3个字符时，就可能破坏程序的帧栈结构，这一点恰恰为恶意攻击者利用。attack lab中使用了有漏洞的`Gets()`函数，并通过不同的编译参数编译了两个二进制文件：ctarget和rtarget。
 
 
-### ctarget
+### 代码注入攻击
 
-ctarget没有启用任何保护措施，攻击者可以注入精心设计的二进制代码，并修改函数返回地址来运行这段代码。
+ctarget没有启用任何保护措施，攻击者可以注入精心设计的二进制代码，并修改函数返回地址来运行这段代码，如下图所示：
+
+![](res/inject.png)
+
+有几种措施可以预防这种攻击：
+
+1. 操作系统提供了`Address space layout randomization (ASLR)`，随机初始化stack的起始位置，因此缓冲区的具体内存地址不再是确定的。没有这个地址就不能再跳回来执行。
+2. CPU提供了`No eXecute`标记，用来标记内存段是`可读`、`可写`，还是`可执行` 的。只要编译器不给stack可执行标记，注入的代码就无法执行。
+3. 编译器提供了`Stack Canary`，在缓冲区附近的一个内存中写入一随机的magic number，在返回前再读出这个magic number看看是否跟原来的一致。因为缓冲区溢出攻击会覆盖这段内存，其写入的值几乎不可能跟这个magic number相同。
+
+Phase 1 到 3 需要利用代码注入攻击ctarget。
+
+### 面向返回(ROP)攻击
+
+rtarget启用了`ASLR`和`No eXecute`标记，但是没有启用`Stack Canary`[1]。代码注入攻击对此无效，需要用到另一种叫做`Return-Oriented Programming（ROP)`攻击的技术。其核心思想是，既然我不能执行自己注入的代码，那么就从程序的TEXT断里面需要可以利用的机器代码片段(也叫做`Gadget`)，利用程序栈把一系列的`Gadget`串起来完成攻击，因此要求这些片段是在`retq`（x86的返回语句）之前。
+
+比如这个不起眼的C函数：
+
+```c
+unsigned addval_219(unsigned x)
+{
+    return x + 2421715793U;
+}
+```
+
+编译后的代码为：
+
+```asm
+00000000004019a7 <addval_219>:
+  4019a7:       8d 87 51 73 58 90       lea    -0x6fa78caf(%rdi),%eax
+  4019ad:       c3                      retq
+
+```
+
+其中`0x4019ab`开始的`58 90 c3`刚好也可以解释为以下汇编语句。也就是把栈顶的元素传送到%rax这个寄存器。da
+
+```
+   0:   58                      pop    %rax
+   1:   90                      nop
+   2:   c3                      retq   
+```
+
+当攻击者找到足够的`Gadget`，就可以利用缓冲区溢出漏洞把这些`Gadget`串联起来完成攻击，如下图所示：
+
+![](res/rop.png)
 
 
-### rtarget
-
+> [1] 读者朋友不妨思考下为什么没有启用Stack Canary？
 
 ## Phase 1
 ```
@@ -490,3 +533,8 @@ PASS: Would have posted the following:
         lab     attacklab
         result  1:PASS:0xffffffff:rtarget:3:2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 06 1A 40 00 00 00 00 00 C5 19 40 00 00 00 00 00 AB 19 40 00 00 00 00 00 48 00 00 00 00 00 00 00 DD 19 40 00 00 00 00 00 34 1A 40 00 00 00 00 00 27 1A 40 00 00 00 00 00 D6 19 40 00 00 00 00 00 C5 19 40 00 00 00 00 00 FA 18 40 00 00 00 00 00 35 39 62 39 39 37 66 61 
 ```
+
+
+## Reference
+
+https://linux-audit.com/linux-aslr-and-kernelrandomize_va_space-setting/
