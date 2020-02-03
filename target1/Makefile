@@ -22,6 +22,9 @@ all: 1 2 3 4 5
 	cat result4 | ./hex2raw | ./rtarget -q
 
 5:
+	gcc -c 5.s
+	objdump -d 5.o
+	cat result5 | ./hex2raw > raw
 	cat result5 | ./hex2raw | ./rtarget -q
 
 clean:
