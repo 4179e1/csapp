@@ -11,7 +11,7 @@ CMU的15-213课程Introduction to Computer Systems (ICS)里面有一个实验叫
 
 > Computer Systems: A Programmer's Perspective(CS:APP)是为了这门课专门编写的教材，中文翻译为《深入理解计算机系统》。想想这门课的标题，Introduction？导论？好像哪里不太对。
 
-## attach lab 说明
+## Attack lab 说明
 
 ### 缓冲区溢出
 
@@ -46,6 +46,8 @@ ctarget没有启用任何保护措施，攻击者可以注入精心设计的二�
 
 rtarget启用了`ASLR`和`No eXecute`标记，但是没有启用`Stack Canary`[1]。代码注入攻击对此无效，需要用到另一种叫做`Return-Oriented Programming（ROP)`攻击的技术。其核心思想是，既然我不能执行自己注入的代码，那么就从程序的TEXT断里面需要可以利用的机器代码片段(也叫做`Gadget`)，利用程序栈把一系列的`Gadget`串起来完成攻击，因此要求这些片段是在`retq`（x86的返回语句）之前。
 
+> [1] 读者朋友不妨思考下为什么没有启用Stack Canary？
+
 比如这个不起眼的C函数：
 
 ```c
@@ -76,8 +78,6 @@ unsigned addval_219(unsigned x)
 
 ![](https://raw.githubusercontent.com/4179e1/csapp/master/target1/res/rop.png)
 > 图片来自CMU 15-213 的 *09-machine-advanced.pdf*
-
-> [1] 读者朋友不妨思考下为什么没有启用Stack Canary？
 
 ### lab说明
 
@@ -129,14 +129,14 @@ End of assembler dump.
 ```
 
 
-### stack layout
+### Stack layout
 
 于是我们可以画出这个栈结构
 
 > 怎么解读这个图？
 > - 这个栈结构是倒过来画的，栈底（高位地址）在上，栈底（地位地址）在下
 > - 左右也是反过来的，低位地址在左边，高位地址在右边。我们知道小端机器的数字不好读，但是左右颠倒之后，这些数字的顺序就符合人的习惯了。
-> - 把这个表当作一个大的数组的话，起始元素在右下角，末尾元素在左上角。需要从右到左，从小到上开始读取。
+> - 把这个表当作一个大的数组的话，起始元素在右下角，末尾元素在左上角。需要从右到左，从下到上开始读取。
 > - 其中 **-** 表示未初始化的内存，里面是随机的值
 
 | address    | 7    | 6    | 5    | 4    | 3    | 2    | 1    | 0    | note                   |
@@ -178,7 +178,7 @@ Phase 1的解法很简单，只要把0x5561dca0上面的返回地址替换成tou
 | 0x5561dc78 | -    | -    | -    | -    | -    | -    | -    | -    | current %rsp           |
 
 
-我用0x2d（`-`的ascii表示）可以随意填充的值，那么按照正常从左到左，从上到下重新排列这个“数组”的话，需要写入缓冲区值是这样的：
+我用0x2d（`-`的ascii值）表示可以随意填充的值，那么按照正常从左到左，从上到下重新排列这个“数组”的话，需要写入缓冲区值是这样的：
 
 ```
 2d 2d 2d 2d 2d 2d 2d 2d
@@ -244,7 +244,7 @@ End of assembler dump.
 ```
 
 
-### 生产注入代码
+### 生成注入代码
 
 ```bash
 # cat 2.s
