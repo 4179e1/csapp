@@ -1,50 +1,146 @@
-# Bomb Lab
+# CSAPP：Bomb Lab
 
-## Source
 
-```
-    72	    /* Hmm...  Six phases must be more secure than one phase! */
-    73	    input = read_line();             /* Get input                   */
-    74	    phase_1(input);                  /* Run the phase               */
-    75	    phase_defused();                 /* Drat!  They figured it out!
-    76					      * Let me know how they did it. */
-    77	    printf("Phase 1 defused. How about the next one?\n");
+## Bomb Lab 说明
+
+Bomb Lab是CMU的15-213课程Introduction to Computer Systems (ICS)里面的一个实验叫attack lab，它提供了一个编译好的二进制程序(bomb)，执行这个程序后需要输入一些特定的内容来解除里面的6个“炸弹”，如果输入的内容有错“炸弹”就会引爆。我们需要通过反汇编来检查和调试这个程序，找到并输入正确的输入字符串来解除炸弹。
+
+本文的主要目的包括：
+1. 通过这个实验熟悉反汇编的过程
+1. 在这个过程中熟悉gdb的使用
+
+## 运行gdb，并检查源代码
+
+启动调试器很简单，直接`gdb bomb`即可，然后输入`list main` 可以看到main函数附近的源代码，完整的代码如下：
+
+```C
+     1  /***************************************************************************
+     2   * Dr. Evil's Insidious Bomb, Version 1.1
+     3   * Copyright 2011, Dr. Evil Incorporated. All rights reserved.
+     4   *
+     5   * LICENSE:
+     6   *
+     7   * Dr. Evil Incorporated (the PERPETRATOR) hereby grants you (the
+     8   * VICTIM) explicit permission to use this bomb (the BOMB).  This is a
+     9   * time limited license, which expires on the death of the VICTIM.
+    10   * The PERPETRATOR takes no responsibility for damage, frustration,
+    11   * insanity, bug-eyes, carpal-tunnel syndrome, loss of sleep, or other
+    12   * harm to the VICTIM.  Unless the PERPETRATOR wants to take credit,
+    13   * that is.  The VICTIM may not distribute this bomb source code to
+    14   * any enemies of the PERPETRATOR.  No VICTIM may debug,
+    15   * reverse-engineer, run "strings" on, decompile, decrypt, or use any
+    16   * other technique to gain knowledge of and defuse the BOMB.  BOMB
+    17   * proof clothing may not be worn when handling this program.  The
+    18   * PERPETRATOR will not apologize for the PERPETRATOR's poor sense of
+    19   * humor.  This license is null and void where the BOMB is prohibited
+    20   * by law.
+    21   ***************************************************************************/
+    22
+    23  #include <stdio.h>
+    24  #include <stdlib.h>
+    25  #include "support.h"
+    26  #include "phases.h"
+    27
+    28  /* 
+    29   * Note to self: Remember to erase this file so my victims will have no
+    30   * idea what is going on, and so they will all blow up in a
+    31   * spectaculary fiendish explosion. -- Dr. Evil 
+    32   */
+    33
+    34  FILE *infile;
+    35
+    36  int main(int argc, char *argv[])
+    37  {
+    38      char *input;
+    39
+    40      /* Note to self: remember to port this bomb to Windows and put a 
+    41       * fantastic GUI on it. */
+    42
+    43      /* When run with no arguments, the bomb reads its input lines 
+    44       * from standard input. */
+    45      if (argc == 1) {  
+    46          infile = stdin;
+    47      } 
+    48
+    49      /* When run with one argument <file>, the bomb reads from <file> 
+    50       * until EOF, and then switches to standard input. Thus, as you 
+    51       * defuse each phase, you can add its defusing string to <file> and
+    52       * avoid having to retype it. */
+    53      else if (argc == 2) {
+    54          if (!(infile = fopen(argv[1], "r"))) {
+    55              printf("%s: Error: Couldn't open %s\n", argv[0], argv[1]);
+    56              exit(8);
+    57          }
+    58      }
+    59
+    60      /* You can't call the bomb with more than 1 command line argument. */
+    61      else {
+    62          printf("Usage: %s [<input_file>]\n", argv[0]);
+    63          exit(8);
+    64      }
+    65
+    66      /* Do all sorts of secret stuff that makes the bomb harder to defuse. */
+    67      initialize_bomb();
+    68
+    69      printf("Welcome to my fiendish little bomb. You have 6 phases with\n");
+    70      printf("which to blow yourself up. Have a nice day!\n");
+    71
+    72      /* Hmm...  Six phases must be more secure than one phase! */
+    73      input = read_line();             /* Get input                   */
+    74      phase_1(input);                  /* Run the phase               */
+    75      phase_defused();                 /* Drat!  They figured it out!
+    76                                        * Let me know how they did it. */
+    77      printf("Phase 1 defused. How about the next one?\n");
     78
-    79	    /* The second phase is harder.  No one will ever figure out
-    80	     * how to defuse this... */
-    81	    input = read_line();
-    82	    phase_2(input);
-    83	    phase_defused();
-    84	    printf("That's number 2.  Keep going!\n");
+    79      /* The second phase is harder.  No one will ever figure out
+    80       * how to defuse this... */
+    81      input = read_line();
+    82      phase_2(input);
+    83      phase_defused();
+    84      printf("That's number 2.  Keep going!\n");
     85
-    86	    /* I guess this is too easy so far.  Some more complex code will
-    87	     * confuse people. */
-    88	    input = read_line();
-    89	    phase_3(input);
-    90	    phase_defused();
-    91	    printf("Halfway there!\n");
+    86      /* I guess this is too easy so far.  Some more complex code will
+    87       * confuse people. */
+    88      input = read_line();
+    89      phase_3(input);
+    90      phase_defused();
+    91      printf("Halfway there!\n");
     92
-    93	    /* Oh yeah?  Well, how good is your math?  Try on this saucy problem! */
-    94	    input = read_line();
-    95	    phase_4(input);
-    96	    phase_defused();
-    97	    printf("So you got that one.  Try this one.\n");
-    98
-    99	    /* Round and 'round in memory we go, where we stop, the bomb blows! */
-   100	    input = read_line();
-   101	    phase_5(input);
-   102	    phase_defused();
-   103	    printf("Good work!  On to the next...\n");
+    93      /* Oh yeah?  Well, how good is your math?  Try on this saucy problem! */
+    94      input = read_line();
+    95      phase_4(input);
+    96      phase_defused();
+    97      printf("So you got that one.  Try this one.\n");
+    98      
+    99      /* Round and 'round in memory we go, where we stop, the bomb blows! */
+   100      input = read_line();
+   101      phase_5(input);
+   102      phase_defused();
+   103      printf("Good work!  On to the next...\n");
    104
-   105	    /* This phase will never be used, since no one will get past the
-   106	     * earlier ones.  But just in case, make this one extra hard. */
-   107	    input = read_line();
-   108	    phase_6(input);
-   109	    phase_defused();
-
+   105      /* This phase will never be used, since no one will get past the
+   106       * earlier ones.  But just in case, make this one extra hard. */
+   107      input = read_line();
+   108      phase_6(input);
+   109      phase_defused();
+   110
+   111      /* Wow, they got it!  But isn't something... missing?  Perhaps
+   112       * something they overlooked?  Mua ha ha ha ha! */
+   113      
+   114      return 0;
+   115  }
 ```
 
-# break points
+其中phase1-6就是我们要解除的炸弹，看上去好像很简单，`list phase_1`看看，我们会发现是空的，里面的调试信息已经被strip掉。
+
+```
+(gdb) list phase_1
+(gdb) 
+```
+
+## break points
+
+首先我们在6个phase的read_line函数输入前打上断点，如下：
 
 ```
 # gdb bomb
@@ -73,7 +169,114 @@ Breakpoint 6 at 0x400ec3: file bomb.c, line 107.
 (gdb)
 ```
 
+为了方便调试，我希望每次在当前目录(/root/csapp/bomb/)里面运行gdb的时候都自动加上这6个断点，这时可以在这个目录下新建一个.gdbinit文件，内容如下
+
+```
+b 73
+b 81
+b 88
+b 94
+b 100
+b 107
+```
+
+但是gdb本身还有个安全设置只允许从特定的路径自动执行初始化命令，我们需要在它的配置文件里面指定一下：
+
+```
+echo 'add-auto-load-safe-path /root/csapp/bomb/.gdbinit' >> ~/.gdbinit
+```
+
+退出再次运行gdb可以看到这6个断点已经自动打上了：
+
+```
+# gdb bomb
+GNU gdb (GDB) Red Hat Enterprise Linux 7.6.1-100.el7_4.1
+Copyright (C) 2013 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "x86_64-redhat-linux-gnu".
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>...
+Reading symbols from /root/csapp/bomb/bomb...done.
+Breakpoint 1 at 0x400e32: file bomb.c, line 73.
+Breakpoint 2 at 0x400e4e: file bomb.c, line 81.
+Breakpoint 3 at 0x400e6a: file bomb.c, line 88.
+Breakpoint 4 at 0x400e86: file bomb.c, line 94.
+Breakpoint 5 at 0x400ea2: file bomb.c, line 100.
+Breakpoint 6 at 0x400ebe: file bomb.c, line 107.
+(gdb) 
+```
+
+## 过程调用
+
+在开始拆弹前我们先复习下x86_64过程调用的栈结构和寄存器使用惯例
+
+
+### 运行时栈
+
+![](img/stack.png)
+
+### 使用惯例
+
+- rax：返回值
+- rsp：栈指针
+- rbp：基址指针（非必须）
+
+- 调用者保存：
+  - rdi
+  - rsi
+  - rdx
+  - rcx
+  - r8
+  - r9
+  - r10
+  - r11
+- 被调者保存：
+  - rbx
+  - ebp
+  - r12
+  - r13
+  - r14
+  - r16
+
+> 假如函数f调用函数g，那么函数f需要先把r10和r11的值压栈保存起来（如果它用到这个两个寄存器的话），因为函数g会直接覆盖里面的内容（如果它需要的话）。
+
+### 参数传递
+
+在调用者保存的寄存器中，有6个用于参数传递：
+
+| 参数    | 寄存器 | 内存位置                   |
+| ------- | ------ | -------------------------- |
+| 1       | %rdi   |                            |
+| 2       | %rsi   |                            |
+| 3       | %rdx   |                            |
+| 4       | %rcx   |                            |
+| 5       | %r8    |                            |
+| 6       | %r9    |                            |
+| n(n>=7) |        | (%rsp + 8 +  8 * (n - $7)) |
+|         |        | 8 为指针长度               |
+
+
 ## Phase 1
+
+
+首先执行`r`命令来到第一个断点
+
+```
+(gdb) r
+Starting program: /root/csapp/bomb/bomb 
+Welcome to my fiendish little bomb. You have 6 phases with
+which to blow yourself up. Have a nice day!
+
+Breakpoint 1, main (argc=<optimized out>, argv=<optimized out>) at bomb.c:73
+73          input = read_line();             /* Get input                   */
+Missing separate debuginfos, use: debuginfo-install glibc-2.17-260.el7_6.5.x86_64
+(gdb) 
+```
+
+`l 73`查看这部分的代码
 
 ```
 (gdb) l 73
@@ -87,6 +290,28 @@ Breakpoint 6 at 0x400ec3: file bomb.c, line 107.
 75	    phase_defused();                 /* Drat!  They figured it out!
 76					      * Let me know how they did it. */
 77	    printf("Phase 1 defused. How about the next one?\n");
+```
+
+
+phase_1 的调试信息已经strip掉的话，我们只能反汇编了
+
+```
+(gdb) disassemble phase_1
+Dump of assembler code for function phase_1:
+   0x0000000000400ee0 <+0>:     sub    $0x8,%rsp
+   0x0000000000400ee4 <+4>:     mov    $0x402400,%esi
+   0x0000000000400ee9 <+9>:     callq  0x401338 <strings_not_equal>
+   0x0000000000400eee <+14>:    test   %eax,%eax
+   0x0000000000400ef0 <+16>:    je     0x400ef7 <phase_1+23>
+   0x0000000000400ef2 <+18>:    callq  0x40143a <explode_bomb>
+   0x0000000000400ef7 <+23>:    add    $0x8,%rsp
+   0x0000000000400efb <+27>:    retq   
+End of assembler dump.
+(gdb) 
+```
+
+
+```
 (gdb) disassemble phase_1
 Dump of assembler code for function phase_1:
    0x0000000000400ee0 <+0>:	sub    $0x8,%rsp
@@ -757,3 +982,49 @@ for (i = 5; i--; i!=0) {
 0x603310 <node5>:	0x000001dd	0x00000005	0x00603320	0x00000000
 0x603320 <node6>:	0x000001bb	0x00000006	0x006032d0	0x00000000
 ```
+
+## 附录：GDB Cheatsheet
+
+| Command                        | Effect                                                        |
+| ------------------------------ | ------------------------------------------------------------- |
+| *Starting and stopping*        |                                                               |
+| quit                           | Exit gdb                                                      |
+| run                            | Run your program (give command-line arguments here)           |
+| kill                           | Stop your program                                             |
+|                                |                                                               |
+| *Breakpoints*                  |                                                               |
+| break multstore                | Set breakpoint at entry to function multstore                 |
+| break *0x400540                | Set breakpoint at address 0x400540                            |
+| delete 1                       | Delete breakpoint 1                                           |
+| delete                         | Delete all breakpoints                                        |
+|                                |
+| *Execution*                    |
+| stepi                          | Execute one instruction                                       |
+| stepi 4                        | Execute four instructions                                     |
+| nexti                          | Like stepi, but proceed through function calls                |
+| continue                       | Resume execution                                              |
+| finish                         | Run until current function returns                            |
+|                                |                                                               |
+| *Examining code*               |                                                               |
+| disas                          | Disassemble current function                                  |
+| disas multstore                | Disassemble function multstore                                |
+| disas 0x400544                 | Disassemble function around address 0x400544                  |
+| disas 0x400540, 0x40054d       | Disassemble code within specified address range               |
+| print /x $rip                  | Print program counter in hex                                  |
+|                                |                                                               |
+| *Examining data*               |
+| print $rax                     | Print contents of %rax in decimal                             |
+| print /x $rax                  | Print contents of %rax in hex                                 |
+| print /t $rax                  | Print contents of %rax in binary                              |
+| print 0x100                    | Print decimal representation of 0x100                         |
+| print /x 555                   | Print hex representation of 555                               |
+| print /x ($rsp+8)              | Print contents of %rsp plus 8 in hex                          |
+| print *(long *) 0x7fffffffe818 | Print long integer at address 0x7fffffffe818                  |
+| print *(long *) ($rsp+8)       | Print long integer at address %rsp + 8                        |
+| x/2g 0x7fffffffe818            | Examine two (8-byte) words starting at address 0x7fffffffe818 |
+| x/20b multstore                | Examine first 20 bytes of function multstore                  |
+|                                |                                                               |
+| *Useful information*           |                                                               |
+| info frame                     | Information about current stack frame                         |
+| info registers                 | Values of all the registers                                   |
+| help                           | Get information about gdb                                     |
