@@ -353,7 +353,7 @@ Breakpoint 2, main (argc=<optimized out>, argv=<optimized out>) at bomb.c:81
 
 ### strings_not_equal
 
-虽然刚才我们幸运地通过了，但是万一strings_not_equal是一个陷阱，它的作用跟名字完全不符合呢？所以我们试着继续分析
+从上面的分析来看，strings_not_equal似乎返回一个int值，如果返回0表示这两个字符串相等。我们可以反汇编确认下，下面包含了注释：
 
 ```
 (gdb) disassemble strings_not_equal
@@ -361,36 +361,43 @@ Dump of assembler code for function strings_not_equal:
    0x0000000000401338 <+0>:     push   %r12
    0x000000000040133a <+2>:     push   %rbp
    0x000000000040133b <+3>:     push   %rbx
-   0x000000000040133c <+4>:     mov    %rdi,%rbx
-   0x000000000040133f <+7>:     mov    %rsi,%rbp
-   0x0000000000401342 <+10>:    callq  0x40131b <string_length>
-   0x0000000000401347 <+15>:    mov    %eax,%r12d
-   0x000000000040134a <+18>:    mov    %rbp,%rdi
-   0x000000000040134d <+21>:    callq  0x40131b <string_length>
-   0x0000000000401352 <+26>:    mov    $0x1,%edx
-   0x0000000000401357 <+31>:    cmp    %eax,%r12d
-   0x000000000040135a <+34>:    jne    0x40139b <strings_not_equal+99>
-   0x000000000040135c <+36>:    movzbl (%rbx),%eax
-   0x000000000040135f <+39>:    test   %al,%al
-   0x0000000000401361 <+41>:    je     0x401388 <strings_not_equal+80>
-   0x0000000000401363 <+43>:    cmp    0x0(%rbp),%al
-   0x0000000000401366 <+46>:    je     0x401372 <strings_not_equal+58>
-   0x0000000000401368 <+48>:    jmp    0x40138f <strings_not_equal+87>
-   0x000000000040136a <+50>:    cmp    0x0(%rbp),%al
-   0x000000000040136d <+53>:    nopl   (%rax)
-   0x0000000000401370 <+56>:    jne    0x401396 <strings_not_equal+94>
-   0x0000000000401372 <+58>:    add    $0x1,%rbx
-   0x0000000000401376 <+62>:    add    $0x1,%rbp
-   0x000000000040137a <+66>:    movzbl (%rbx),%eax
-   0x000000000040137d <+69>:    test   %al,%al
-   0x000000000040137f <+71>:    jne    0x40136a <strings_not_equal+50>
-   0x0000000000401381 <+73>:    mov    $0x0,%edx
-   0x0000000000401386 <+78>:    jmp    0x40139b <strings_not_equal+99>
-   0x0000000000401388 <+80>:    mov    $0x0,%edx
-   0x000000000040138d <+85>:    jmp    0x40139b <strings_not_equal+99>
-   0x000000000040138f <+87>:    mov    $0x1,%edx
-   0x0000000000401394 <+92>:    jmp    0x40139b <strings_not_equal+99>
-   0x0000000000401396 <+94>:    mov    $0x1,%edx
+   0x000000000040133c <+4>:     mov    %rdi,%rbx			# rdi,rbx: s1
+   0x000000000040133f <+7>:     mov    %rsi,%rbp			# rsi,rbp: s2
+   0x0000000000401342 <+10>:    callq  0x40131b <string_length>	
+   0x0000000000401347 <+15>:    mov    %eax,%r12d			# r12d: l1
+   0x000000000040134a <+18>:    mov    %rbp,%rdi			# rdi: s2
+   0x000000000040134d <+21>:    callq  0x40131b <string_length>		# rax: l2
+   0x0000000000401352 <+26>:    mov    $0x1,%edx			# tmp = 1
+   0x0000000000401357 <+31>:    cmp    %eax,%r12d		        # if l1 != l2:
+   0x000000000040135a <+34>:    jne    0x40139b <strings_not_equal+99>  #     goto RETURN
+   0x000000000040135c <+36>:    movzbl (%rbx),%eax			# c = s1[0]
+   0x000000000040135f <+39>:    test   %al,%al				# if c == 0:
+   0x0000000000401361 <+41>:    je     0x401388 <strings_not_equal+80>  #     goto L1
+   0x0000000000401363 <+43>:    cmp    0x0(%rbp),%al			# if s2[0] == c
+   0x0000000000401366 <+46>:    je     0x401372 <strings_not_equal+58>  #     goto L2
+   0x0000000000401368 <+48>:    jmp    0x40138f <strings_not_equal+87>  # goto L3
+.L5:
+   0x000000000040136a <+50>:    cmp    0x0(%rbp),%al                    # if s2[0] != c2
+   0x000000000040136d <+53>:    nopl   (%rax)                           #
+   0x0000000000401370 <+56>:    jne    0x401396 <strings_not_equal+94>  #     goto L6
+.L2:
+   0x0000000000401372 <+58>:    add    $0x1,%rbx			# s1 += 1
+   0x0000000000401376 <+62>:    add    $0x1,%rbp                        # s2 += 2
+   0x000000000040137a <+66>:    movzbl (%rbx),%eax                      # c2 = s1[0]
+   0x000000000040137d <+69>:    test   %al,%al                          # if c2 != 0
+   0x000000000040137f <+71>:    jne    0x40136a <strings_not_equal+50>  #     goto L5
+   0x0000000000401381 <+73>:    mov    $0x0,%edx			# tmp = 0
+   0x0000000000401386 <+78>:    jmp    0x40139b <strings_not_equal+99>  # goto RETURN
+.L1:
+   0x0000000000401388 <+80>:    mov    $0x0,%edx                        # tmp = 0
+   0x000000000040138d <+85>:    jmp    0x40139b <strings_not_equal+99>  # goto L4:
+.L3:
+   0x000000000040138f <+87>:    mov    $0x1,%edx                        # tmp = 1
+.L4:
+   0x0000000000401394 <+92>:    jmp    0x40139b <strings_not_equal+99>  # goto RETURN
+.L6:
+   0x0000000000401396 <+94>:    mov    $0x1,%edx                        # tmp = 1
+.RETURN:
    0x000000000040139b <+99>:    mov    %edx,%eax
    0x000000000040139d <+101>:   pop    %rbx
    0x000000000040139e <+102>:   pop    %rbp
@@ -398,6 +405,75 @@ Dump of assembler code for function strings_not_equal:
    0x00000000004013a1 <+105>:   retq   
 End of assembler dump.
 (gdb) 
+```
+
+开头的push和结尾的pop用来保存和还原寄存器里面的值，后面不再讨论。
+
+其中 nopl 是个空语句，参考[What does NOPL do in x86 system?](https://stackoverflow.com/questions/12559475/what-does-nopl-do-in-x86-system#comment51398481_12559508)
+
+整个汇编代码跳来跳去很不好看，转换成C代码大概是：
+
+```C
+int strings_not_equal (char *s1, char *s2) {
+	int l1 = string_length(s1);
+	int l2 = string_lenght(s2);
+
+	// 0: equal
+	// 1: not equal
+	int tmp = 1;
+
+	if l1 != l2:
+		goto RETURN;
+	
+	for (;s1[0] ! = '\0'; s1++, s2++) {
+		if s1[0] != s2[0] {
+			tmp = 0
+			goto RETURN
+		}
+	}
+	tmp = 0
+
+.RETURN:
+	int ret = tmp
+	return ret
+}
+```
+
+其中调用了一个`string_length`的函数，用于计算字符串的长度，注释和翻译后的C代码参考：
+
+```
+(gdb) disassemble string_length
+Dump of assembler code for function string_length:
+   0x000000000040131b <+0>:     cmpb   $0x0,(%rdi)			# if s[0] == '\0':
+   0x000000000040131e <+3>:     je     0x401332 <string_length+23>      #     goto RET1
+   0x0000000000401320 <+5>:     mov    %rdi,%rdx                        # char *tmp = s
+.L1:
+   0x0000000000401323 <+8>:     add    $0x1,%rdx                        # tmp++
+   0x0000000000401327 <+12>:    mov    %edx,%eax			# tmp2  = tmp
+   0x0000000000401329 <+14>:    sub    %edi,%eax                        # tmp2 -= s
+   0x000000000040132b <+16>:    cmpb   $0x0,(%rdx)                      # if '\0' != tmp[0]
+   0x000000000040132e <+19>:    jne    0x401323 <string_length+8>       #     goto L2:
+   0x0000000000401330 <+21>:    repz retq				# return tmp2
+.RET1: 
+   0x0000000000401332 <+23>:    mov    $0x0,%eax
+   0x0000000000401337 <+28>:    retq   
+End of assembler dump.
+(gdb) 
+```
+
+```C
+int string_length(char *s) {
+	if s[0] == '\0':
+		return 0;
+
+	int len = 0;
+
+	char *tmp = s
+	for (tmp = s; tmp[0] != '\0'; tmp++) {
+		len = tmp - s
+	}
+	return len;
+}
 ```
 
 ## Phase 2
