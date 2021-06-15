@@ -492,15 +492,15 @@ int string_length(char *s) {
 85
 (gdb) disassemble phase_2
 Dump of assembler code for function phase_2:
-   0x0000000000400efc <+0>:	push   %rbp
-   0x0000000000400efd <+1>:	push   %rbx
-   0x0000000000400efe <+2>:	sub    $0x28,%rsp
-   0x0000000000400f02 <+6>:	mov    %rsp,%rsi                    # it's array y in read_six_numbers
-   0x0000000000400f05 <+9>:	callq  0x40145c <read_six_numbers>  # no return value, %eax not used 
-   0x0000000000400f0a <+14>:	cmpl   $0x1,(%rsp)              # if y[0] == 1: goto  L1
-   0x0000000000400f0e <+18>:	je     0x400f30 <phase_2+52>
+   0x0000000000400efc <+0>:	    push   %rbp
+   0x0000000000400efd <+1>:	    push   %rbx
+   0x0000000000400efe <+2>:	    sub    $0x28,%rsp
+   0x0000000000400f02 <+6>:	    mov    %rsp,%rsi                    # it's array y in read_six_numbers
+   0x0000000000400f05 <+9>:	    callq  0x40145c <read_six_numbers>  # no return value, %eax not used 
+   0x0000000000400f0a <+14>:	cmpl   $0x1,(%rsp)              # if y[0] == 1
+   0x0000000000400f0e <+18>:	je     0x400f30 <phase_2+52>    #     goto L1
    0x0000000000400f10 <+20>:	callq  0x40143a <explode_bomb>
-   0x0000000000400f15 <+25>:	jmp    0x400f30 <phase_2+52>    # ????
+   0x0000000000400f15 <+25>:	jmp    0x400f30 <phase_2+52>    # goto L1
 
    .L2
    0x0000000000400f17 <+27>:	mov    -0x4(%rbx),%eax          # int t = *(p - 1)  // y[0] for first loop, y[1] the second...
@@ -517,18 +517,23 @@ Dump of assembler code for function phase_2:
 
    .L1
    0x0000000000400f30 <+52>:	lea    0x4(%rsp),%rbx          # int *p = &y[1]
-   0x0000000000400f35 <+57>:	lea    0x18(%rsp),%rbp         $ int *end = &y[6]
-   0x0000000000400f3a <+62>:	jmp    0x400f17 <phase_2+27>
+   0x0000000000400f35 <+57>:	lea    0x18(%rsp),%rbp         # int *end = &y[6] // 0x18 = 24
    0x0000000000400f3c <+64>:	add    $0x28,%rsp
    0x0000000000400f40 <+68>:	pop    %rbx
    0x0000000000400f41 <+69>:	pop    %rbp
    0x0000000000400f42 <+70>:	retq
 End of assembler dump.
+```
+
+这个函数以input和%rsp指向的一个内存位置调用了read_six_numbers，我们来检查这个函数确定%rsp指向一个什么类型的数据
+
+
+```
 (gdb) disassemble read_six_numbers
 Dump of assembler code for function read_six_numbers:   # input: %rdi   y: %rsi
-   0x000000000040145c <+0>:	sub    $0x18,%rsp
-   0x0000000000401460 <+4>:	mov    %rsi,%rdx                        # t0 = &y[0]  // %rdx
-   0x0000000000401463 <+7>:	lea    0x4(%rsi),%rcx                   # t1 = &y[1]  // %rcx
+   0x000000000040145c <+0>:	    sub    $0x18,%rsp                   # 0x18 = 24
+   0x0000000000401460 <+4>:  	mov    %rsi,%rdx                    # t0 = &y[0]  // %rdx
+   0x0000000000401463 <+7>:	    lea    0x4(%rsi),%rcx               # t1 = &y[1]  // %rcx
    0x0000000000401467 <+11>:	lea    0x14(%rsi),%rax              # t2 = &y[5]  // %rax
    0x000000000040146b <+15>:	mov    %rax,0x8(%rsp)               # t3 = t2 = &y[5]   // 0x8(%rsp)
    0x0000000000401470 <+20>:	lea    0x10(%rsi),%rax              # t2 = &y[4]  // %rax
@@ -544,10 +549,53 @@ Dump of assembler code for function read_six_numbers:   # input: %rdi   y: %rsi
    0x0000000000401499 <+61>:	add    $0x18,%rsp
    0x000000000040149d <+65>:	retq
 End of assembler dump.
-(gdb) p /s (char *)0x4025c3
-$1 = 0x4025c3 "%d %d %d %d %d %d"                                  # so, sscanf (input, "%d %d %d %d %d %d", int_ptrs...)
 ```
 
+我们可以发现，这个函数依次把%rsi (buf)  为起始位置的不同偏移量的值赋给了6个不同的寄存器/内存位置： 仔细观察这些位置，我们可以发现它们是调用惯例里面的参数3-8。
+
+接下来编译器把$0x4025c传入%esi作为参数2，然后调用库函数sscanf。从man手册我们可以知道这个函数的声明为：
+
+```
+int sscanf(const char *restrict s, const char *restrict format, ...);
+```
+
+其中参数1为我们输入的input，由这个声明我们可以知道$0x4025c类型也为char *，检查这个值我们可以发现它是sscanf的格式化字符串
+
+```
+(gdb) p /s (char *)0x4025c3
+$1 = 0x4025c3 "%d %d %d %d %d %d"
+```
+
+最后，我们拼凑出了了调用sscanf的所有参数
+
+| 参数 | 位置      | 值                     |
+| ---- | --------- | ---------------------- |
+| 1    | %rdi      |                        |
+| 2    | %rsi      |                        |
+| 3    | %rdx      | %rsi                   |
+| 4    | %rcx      | 4(%rsi)                |
+| 5    | %r8       | 8(%rsi)                |
+| 6    | %r9       | 0xc(%rsi)  => 12(%rsi) |
+| 7    | (%rsp)    | 0x10(%rsi) => 16(%rsp) |
+| 8    | 0x8(%rsp) | 0X14(%rsi) => 20(%rsp) |
+
+从格式化字符串我们可以知道，参数3-8都是int类型的指针，结合它们的布局，我们可以推断出buf是一个int数组，那么read_six_numbers的C代码如下 
+
+```C
+void read_six_numbers (char *input, int buf[6]){
+    int i = ssanf (input, "%d %d %d %d %d %d", &buf[0], &buf[1], &buf[2], &buf[3], &buf[4], &buf[5])
+    if (i <= 5)
+        explode_bomb()
+}
+```
+
+
+```C
+void phase_2 (char *input) {
+    // buf what?
+    read_six_numbers(input, buf)
+}
+```
 
 ```
 Continuing.
