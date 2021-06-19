@@ -505,8 +505,8 @@ Dump of assembler code for function phase_2:
    .L2
    0x0000000000400f17 <+27>:	mov    -0x4(%rbx),%eax          # int t = *(p - 1)  // y[0] for first loop, y[1] the second...
    0x0000000000400f1a <+30>:	add    %eax,%eax                # t *= 2
-   0x0000000000400f1c <+32>:	cmp    %eax,(%rbx)              # if (*p == t) : goto L3
-   0x0000000000400f1e <+34>:	je     0x400f25 <phase_2+41>
+   0x0000000000400f1c <+32>:	cmp    %eax,(%rbx)              # if (*p == t):
+   0x0000000000400f1e <+34>:	je     0x400f25 <phase_2+41>    #     goto L3
    0x0000000000400f20 <+36>:	callq  0x40143a <explode_bomb>
 
    .L3
@@ -518,6 +518,7 @@ Dump of assembler code for function phase_2:
    .L1
    0x0000000000400f30 <+52>:	lea    0x4(%rsp),%rbx          # int *p = &y[1]
    0x0000000000400f35 <+57>:	lea    0x18(%rsp),%rbp         # int *end = &y[6] // 0x18 = 24
+   0x0000000000400f3a <+62>:    jmp    0x400f17 <phase_2+27>   # goto L2
    0x0000000000400f3c <+64>:	add    $0x28,%rsp
    0x0000000000400f40 <+68>:	pop    %rbx
    0x0000000000400f41 <+69>:	pop    %rbp
@@ -589,11 +590,31 @@ void read_six_numbers (char *input, int buf[6]){
 }
 ```
 
+对应的，phase_2的C代码如下，它用一个以1为基数的等比数列跟read_six_numbers()的输入做对比。
 
 ```C
 void phase_2 (char *input) {
-    // buf what?
-    read_six_numbers(input, buf)
+    int buf[6];
+    read_six_numbers(input, buf);
+
+    int value = 1;
+    if (buf[0] == value) {
+	    int *p = &buf[1]
+	    int *end = &buf[6]
+
+	    do {
+	    	int tmp = *(p - 1)
+	    	tmp *= 2
+		
+		if *p == tmp {
+		    p++
+		} else {
+			explode_bomb()
+		}
+	    } while ( end != p)
+    } else {
+	    explode_bomb()
+    }
 }
 ```
 
