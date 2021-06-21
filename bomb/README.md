@@ -330,6 +330,11 @@ End of assembler dump.
 $1 = 0x402400 "Border relations with Canada have never been better."
 ```
 
+> 检查一个内存位置也可以使用x命令
+> (gdb) x/s 0x402400
+> 0x402400:       "Border relations with Canada have never been better."
+> (gdb) 
+
 这时候我们大胆地继续运行，输入上面的字符串吧，问题解决：
 
 ```
@@ -643,7 +648,7 @@ Dump of assembler code for function phase_3:                        # phase_3 (c
    0x0000000000400f6a <+39>:	cmpl   $0x7,0x8(%rsp)                   # if y > 0x7: goto .L2 (explode_bomb), so 0 - 7 in switch
    0x0000000000400f6f <+44>:	ja     0x400fad <phase_3+106>
    0x0000000000400f71 <+46>:	mov    0x8(%rsp),%eax                   # switch (x)
-   0x0000000000400f75 <+50>:	jmpq   *0x402470(,%rax,8)               
+   0x0000000000400f75 <+50>:	jmpq   *0x402470(,%rax,8)               # jump table
    0x0000000000400f7c <+57>:	mov    $0xcf,%eax                       # case 0: t = 0xcf
    0x0000000000400f81 <+62>:	jmp    0x400fbe <phase_3+123>
    0x0000000000400f83 <+64>:	mov    $0x2c3,%eax                      # case 2: t = 0x2c3
@@ -676,12 +681,64 @@ Dump of assembler code for function phase_3:                        # phase_3 (c
    0x0000000000400fc9 <+134>:	add    $0x18,%rsp
    0x0000000000400fcd <+138>:	retq
 End of assembler dump.
+```
+
+这里的难点是`<+50>:	jmpq   *0x402470(,%rax,8)`，其中0x402470 指向一个跳转表，从前面的`cmpl   $0x7,0x8(%rsp)`我们可以猜测它一共有8个元素。它的类型是指针，包含8字节，因此要用gdb的g格式打印。
+
+
+```
 (gdb) x/8gx 0x402470
 0x402470:	0x0000000000400f7c	0x0000000000400fb9  // case 0, 1(default)
 0x402480:	0x0000000000400f83	0x0000000000400f8a  // case 2, 3
 0x402490:	0x0000000000400f91	0x0000000000400f98  // case 4, 5
 0x4024a0:	0x0000000000400f9f	0x0000000000400fa6  // case 6, 7
 ```
+
+上面的值是代码段正下方8个分支的地址(从<+62>开始），它们分别给eax赋了不同的值
+
+
+对应的C代码如下
+
+```C
+void phase_3(char *input) {
+    int x, y;
+    char *fmt = "%d %d";
+    int n = sscanf (input, fmt, &x, &y);
+    if n > 0 {
+        explode_bomb();
+    }
+
+    if x > 7 {
+        explode_bomb();
+    }
+    int t;
+    switch (x) {
+    case 0:
+        t = 207;
+    case 2:
+        t = 707;
+    case 3:
+        t = 256;
+    case 4:
+        t = 389;
+    case 5:
+        t = 206;
+    case 6:
+        t = 682;
+    case 7:
+        t = 326;
+    default:
+        t = 311;
+    }
+
+    if y != t {
+        explode_bomb()
+    }
+
+}
+```
+
+我们只要按照这个表，从中随意挑一组值输入即可解开这题，比如`0 207`或`1 311`
 
 | label | value |
 | ----- | ----- |
