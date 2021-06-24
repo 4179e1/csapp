@@ -826,6 +826,8 @@ void phase_4(char *input) {
 }
 ```
 
+从这里可以看到，y需要等于0
+
 ```
 (gdb) disas func4
 Dump of assembler code for function func4:                  # func4 (a: %edi, b: %esi, c: %edx)
@@ -894,7 +896,7 @@ int func4 (int a, int b, int c) {   # b=0, c=14
 }
 ```
 
-从上面可以看到当a=7时，func4返回0
+从上面可以看到当a（即phase_4中的x)=7时，func4返回0
 
 ```C
 (gdb) c
