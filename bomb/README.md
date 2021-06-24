@@ -916,7 +916,7 @@ Dump of assembler code for function phase_5:                        # phase_5 (c
    0x0000000000401067 <+5>:	mov    %rdi,%rbx
    0x000000000040106a <+8>:	mov    %fs:0x28,%rax                    # Stack Canary: https://stackoverflow.com/questions/10325713/why-does-this-memory-address-fs0x28-fs0x28-have-a-random-value
 
-                                                                    # char tmp[6] ?
+                                                                    # char a[6] ?
                                                                     # char c
                                                                     # char *pc = &c
    0x0000000000401073 <+17>:	mov    %rax,0x18(%rsp)  
@@ -928,18 +928,18 @@ Dump of assembler code for function phase_5:                        # phase_5 (c
    0x0000000000401089 <+39>:	jmp    0x4010d2 <phase_5+112>
 
    .L2
-   # char *msg = "maduiersnfotvbylSo you think you can stop the bomb with ctrl-c, do you?"
+   # char *msg1 = "maduiersnfotvbylSo you think you can stop the bomb with ctrl-c, do you?"
    0x000000000040108b <+41>:	movzbl (%rbx,%rax,1),%ecx           # char m  = input[i]
    0x000000000040108f <+45>:	mov    %cl,(%rsp)                   # *pc = m
    0x0000000000401092 <+48>:	mov    (%rsp),%rdx                  # char t = *pc
    0x0000000000401096 <+52>:	and    $0xf,%edx                    # t |= 0xf
-   0x0000000000401099 <+55>:	movzbl 0x4024b0(%rdx),%edx          # t = msg[t]
-   0x00000000004010a0 <+62>:	mov    %dl,0x10(%rsp,%rax,1)        # tmp[i] = t
+   0x0000000000401099 <+55>:	movzbl 0x4024b0(%rdx),%edx          # x = msg[t]
+   0x00000000004010a0 <+62>:	mov    %dl,0x10(%rsp,%rax,1)        # tmp[i] = x
    0x00000000004010a4 <+66>:	add    $0x1,%rax                    # i += 1
    0x00000000004010a8 <+70>:	cmp    $0x6,%rax                    # if i != 6: goto .L2
    0x00000000004010ac <+74>:	jne    0x40108b <phase_5+41>
 
-   0x00000000004010ae <+76>:	movb   $0x0,0x16(%rsp)              # tmp[0] = '\0'
+   0x00000000004010ae <+76>:	movb   $0x0,0x16(%rsp)              # a[7] = '\0'
    0x00000000004010b3 <+81>:	mov    $0x40245e,%esi               # char *b = "flyers"
    0x00000000004010b8 <+86>:	lea    0x10(%rsp),%rdi              # char *a = tmp
    0x00000000004010bd <+91>:	callq  0x401338 <strings_not_equal> # n = strings_not_equal (a, b)
@@ -971,8 +971,50 @@ End of assembler dump.
 0x40245e:	"flyers"
 ```
 
-from python
+其中`mov    %fs:0x28,%rax `是 stack canary，用来防止缓冲区溢出攻击，参考https://stackoverflow.com/questions/10325713/why-does-this-memory-address-fs0x28-fs0x28-have-a-random-value 。
+
+```C
+char *msg1 = "maduiersnfotvbylSo you think you can stop the bomb with ctrl-c, do you?";
+char *msg2 = "flyers";
+void phase_5 (char *input) {
+    int n = 0;
+    char a[7];
+    char c; // %rsp
+    char *pc = &c; //  (%rsp)
+
+    n = string_length (input);
+    if (n != 6) {
+        explode_bomb();
+    }
+
+    for (int i = 0; i <= 6; i++) {
+        *pc = input[i];
+        char t = *pc;
+        t |= 0xf;
+        
+        char x = msg1[t];
+        a[i] = x;
+    }
+
+    a[7] = '\0';
+    
+    n = strings_not_equal (a, msg2);
+    if n != 0 {
+        explode_bomb();
+    }
+    
+}
 ```
+
+我们需要构造一个6字节的字符串，使得a的值为"flyers"，假设我们给input传入'abcdef'，我们来算一下a[0]的值：
+- char t = 'a';
+- `'a' | 0xf` => `0x3a | 0xf` = > `0xa`  // `man ascii`可知a的ascii码为0x3a
+- a[0] = msg1[0xa] = msg1[0x] = msg1[10] = 'o'
+
+
+知道怎么计算这个值后反过来推理，我们希望第一个值为'f'，我们借助一段python程序看看msg1中每个字符对应的序号（16进制表示）：
+
+```python
 >>> s="maduiersnfotvbyl"
 >>> i=0
 >>> for x in s:
@@ -997,7 +1039,7 @@ from python
 0xf l           # 2
 ```
 
-so that's: 0x9 0xf 0x5 0x 6 0x7
+根据msg2 "flyers"可知它们分别是`0x9 0xf 0xe 0x5 0x6 0x7`，只要在ascii码里面找到6个字符，它们的后4bit满足这个值即可，比如ionefg, Ion567...
 
 ![](ascii.jpg)
 
