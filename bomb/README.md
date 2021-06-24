@@ -771,7 +771,7 @@ Dump of assembler code for function phase_4:
    0x0000000000401024 <+24>:	callq  0x400bf0 <__isoc99_sscanf@plt>   # n = sscanf (input, fmt, &x, &y)
    0x0000000000401029 <+29>:	cmp    $0x2,%eax                        # if n != 2: goto .L1 (explode)
    0x000000000040102c <+32>:	jne    0x401035 <phase_4+41>
-   0x000000000040102e <+34>:	cmpl   $0xe,0x8(%rsp)                   # if y <= 14: goto .L2
+   0x000000000040102e <+34>:	cmpl   $0xe,0x8(%rsp)                   # if x <= 14: goto .L2
    0x0000000000401033 <+39>:	jbe    0x40103a <phase_4+46>            
    .L1
    0x0000000000401035 <+41>:	callq  0x40143a <explode_bomb>
@@ -797,6 +797,35 @@ End of assembler dump.
 0x4025cf:	"%d %d"
 ```
 
+```C
+void phase_4(char *input) {
+	int x, y;
+
+	int n = sscanf (input, "%d %d", &x, &y);
+	if (n != 2) {
+		explode_bomb();
+	}
+
+	if ((unsigned int)x > 14) {
+		explode_bomb();
+	}
+
+	int a = x;
+	int b = 0;
+	int c = 14;
+
+	n = func4 (a, b, c)
+	if n != 0 {
+		explode_bomb()
+	}
+
+	if y != 0 {
+		explocde_bomb()
+	}
+
+}
+```
+
 ```
 (gdb) disas func4
 Dump of assembler code for function func4:                  # func4 (a: %edi, b: %esi, c: %edx)
@@ -805,7 +834,7 @@ Dump of assembler code for function func4:                  # func4 (a: %edi, b:
    0x0000000000400fd4 <+6>:	sub    %esi,%eax                # t1 -= b
    0x0000000000400fd6 <+8>:	mov    %eax,%ecx                #    so far: t1 = c - b  
    0x0000000000400fd8 <+10>:	shr    $0x1f,%ecx           # unsigned int t2 = t1 >> 31 # %ecx
-   0x0000000000400fdb <+13>:	add    %ecx,%eax            # t1 += t2
+   0x0000000000400fdb <+13>:	add    %ecx,%eax            # t1 += t2    # eax
    0x0000000000400fdd <+15>:	sar    %eax                 # t1 >>= 1
    0x0000000000400fdf <+17>:	lea    (%rax,%rsi,1),%ecx   # ugsigned int t3 = t1 + b  # %ecx
 
@@ -821,7 +850,7 @@ Dump of assembler code for function func4:                  # func4 (a: %edi, b:
    0x0000000000400ff7 <+41>:	cmp    %edi,%ecx            # if t3 >= a: goto .L2 (Return)
    0x0000000000400ff9 <+43>:	jge    0x401007 <func4+57>
    0x0000000000400ffb <+45>:	lea    0x1(%rcx),%esi       # b = t3 + 1
-   0x0000000000400ffe <+48>:	callq  0x400fce <func4>       # n = func4 ()
+   0x0000000000400ffe <+48>:	callq  0x400fce <func4>       # n = func4 (a, b, c)
    0x0000000000401003 <+53>:	lea    0x1(%rax,%rax,1),%eax  # n = 2*n + 1
 
    .L2
@@ -830,7 +859,8 @@ Dump of assembler code for function func4:                  # func4 (a: %edi, b:
 End of assembler dump.
 ```
 
-```
+
+```C
 int func4 (int a, int b, int c) {   # b=0, c=14
     unsigned int t1 = c - b;        // 14
     unsigned int t2 = t1 >> 31;     // 0
@@ -852,7 +882,7 @@ int func4 (int a, int b, int c) {   # b=0, c=14
 .L1
 
     n = 0
-    if t3 >= a
+    if (t3 >= a)
         return 0
 
 
@@ -862,6 +892,15 @@ int func4 (int a, int b, int c) {   # b=0, c=14
     return 2*n + 1
 
 }
+```
+
+从上面可以看到当a=7时，func4返回0
+
+```C
+(gdb) c
+Continuing.
+7 0
+So you got that one.  Try this one.
 ```
 
 
