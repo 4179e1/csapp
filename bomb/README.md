@@ -1078,8 +1078,8 @@ so that's inoefg or INOEFG
 
   .L4
   401135:       movslq %ebx,%rax                    # long int k = (long)j
-  401138:       mov    (%rsp,%rax,4),%eax           # int t2 = y[k]
-  40113b:       cmp    %eax,0x0(%rbp)               # if yp4[0] != k: goto .L3
+  401138:       mov    (%rsp,%rax,4),%eax           # int t2 = y[k] = y[j] // %eax
+  40113b:       cmp    %eax,0x0(%rbp)               # if yp4[0] != t2: goto .L3
   40113e:       jne    401145 <phase_6+0x51>
   401140:       callq  40143a <explode_bomb>
 
@@ -1091,10 +1091,12 @@ so that's inoefg or INOEFG
   401151:       jmp    401114 <phase_6+0x20>        # goto .L5
 
 
-  # 上面这一段要求输入1 2 3 4 5 6这些数字的组合，不能重复
-int[6] y;
-int *yp1 = &y[0]
+# 上面这一段要求输入1 2 3 4 5 6这些数字的组合，不能重复
 
+int[6] y;
+int *yp1 = &y[0];
+
+read_six_number (input, y);
 
 for (i = 0; i != 6; i++) {
     yp4 = yp1;
@@ -1132,13 +1134,17 @@ for (i = 0; i != 6; i++) {
 
   # 上面一段用7减去数组所有元素，1 2 3 4 5 6 ==> 6 5 4 3 2 1
 
+for (int *yp = y; yp!= &y[6]; yp++) {
+    *yp = 7 - *yp;
+}
+
   40116f:       mov    $0x0,%esi                    # int i = 0            // %esi, %rsi
   401174:       jmp    401197 <phase_6+0xa3>        # goto .L7
 
   .L10
-  401176:       mov    0x8(%rdx),%rdx               # p += 1 // 指向rdx后面一个quad word
+  401176:       mov    0x8(%rdx),%rdx               # p = p->next // 指向rdx后面一个quad word
   40117a:       add    $0x1,%eax                    # j += 1
-  40117d:       cmp    %ecx,%eax                    # if j != c: goto .L10
+  40117d:       cmp    %ecx,%eax                    # if j != x: goto .L10
   40117f:       jne    401176 <phase_6+0x82>
   401181:       jmp    401188 <phase_6+0x94>        # else goto .L11
 
@@ -1163,27 +1169,26 @@ for (i = 0; i != 6; i++) {
 这一段对应的C代码
 int *sa[6]    // 8 bytes align
 
-i = 0
-
-for (i = 0; i != 6; i++) {  // i : %esi, %rsi
-.L7
-    int x = y[i];   // 4 bytes align
     struct node *p;
-    if x <= 1 {
-.L8
-        p = &node1
-    } else {
-        p = &node1;
-        int j = 1;
-.L10
-        do {
-            p = p->next;
-            j++;
-        } while (j != c);
+    for (i = 0; i != 6; i++) {
+.L7:
+        int x = y[i]
+        if x <= 1 {
+.L8:
+            p = &node1;
+        } else {
+            p = &node1;
+            int j = 1;
+.L10:
+            do {
+                p = p->next
+                j++
+            } while (x != j);
+        }
+.L11:
+        sa[i] = p;
     }
-.L11
-    sa[i] = p;
-}
+
 
 (gdb) x/24wx 0x6032d0
 0x6032d0 <node1>:	0x0000014c	0x00000001	0x006032e0	0x00000000
@@ -1226,7 +1231,7 @@ struct node6 = { .magic=0x1bb, .index=6, .next = NULL}
   4011ab:       mov    0x20(%rsp),%rbx          # struct node *begin = sa[0]      // %rbx
   4011b0:       lea    0x28(%rsp),%rax          # struct node **pp = &sa[1]       // %rax
   4011b5:       lea    0x50(%rsp),%rsi          # struct node **sential = &sa[6]  // %rsi
-  4011ba:       mov    %rbx,%rcx                # int *p = begin                  // %rcx
+  4011ba:       mov    %rbx,%rcx                # struct node *p = begin          // %rcx
 
                                                 # struct node *tp;                // %rdx
   .L13
@@ -1239,22 +1244,16 @@ struct node6 = { .magic=0x1bb, .index=6, .next = NULL}
   4011d0:       jmp    4011bd <phase_6+0xc9>    # goto .L13
 
 ```
-struct node *begin = sa[0]      // %rbx
-struct node **pp = &sa[1]       // %rax
-struct node **sential = &sa[6]  // %rsi
-
-struct node *p = begin          // %rcx
-struct node *tp = *pp
-
-while(1) {
-    tp = *pp;      // %rdx
-    p->next = tp;
-    pp += 1;
-    if (pp == sential)
-        continue
-    p = tp;
-} while (pp != sential)
-
+    struct node *prev = sa[0];
+    struct node **pp = &sa[1];
+    struct node **sential = &sa[6];
+    struct node *p = begin;
+    do {
+        struct *node tp = *pp;
+        p->next = tp;
+        pp += 1;
+        p = tp;
+    } while (pp != sential)
 
 这一段按照输入重新调整链表
 (gdb) x/6gx $rsp+0x20
@@ -1310,6 +1309,7 @@ for (i = 5; i--; i!=0) {
     }
 } 
 
+这一段校验6个node的magic是否按照从小到大排列
 
 (gdb) x/24wx 0x6032d0
 0x6032d0 <node1>:	0x0000014c	0x00000001	0x006032e0	0x00000000
@@ -1320,6 +1320,90 @@ for (i = 5; i--; i!=0) {
 0x603320 <node6>:	0x000001bb	0x00000006	0x006032d0	0x00000000
 ```
 
+合起来看：
+
+```C
+struct node {
+    unsigned long magic;
+    unsigned long index;
+    struct node *next;
+};
+
+struct node1 = { .magic=0x14c, .index=1, .next = &node2};
+struct node2 = { .magic=0x0a8, .index=2, .next = &node3};
+struct node3 = { .magic=0x39c, .index=3, .next = &node4};
+struct node4 = { .magic=0x2b3, .index=4, .next = &node5};
+struct node5 = { .magic=0x1dd, .index=5, .next = &node6};
+struct node6 = { .magic=0x1bb, .index=6, .next = NULL};
+
+void phase_6 (char *input) {
+    struct node*[6] sa;
+    int[6] y;
+
+    read_six_number (input, y);
+
+    for (int i = 0; i != 7; i++) {
+        int t1 = y[i] - 1;
+        if t1 > 5 {
+            explode();
+        }
+
+        for (int j = i; j <= 5; j++) {
+            int t2 = y[j];
+            if t1 == t2 {
+                explode();
+            }
+        }
+    }
+
+    for (int *yp = y; yp!= &y[6]; yp++) {
+        *yp = 7 - *yp;
+    }
+
+    struct node *p;
+    for (i = 0; i != 6; i++) {
+.L7:
+        int x = y[i]
+        if x <= 1 {
+.L8:
+            p = &node1;
+        } else {
+            p = &node1;
+            int j = 1;
+.L10:
+            do {
+                p = p->next
+                j++
+            } while (x != j);
+        }
+.L11:
+        sa[i] = p;
+    }
+
+
+    struct node *prev = sa[0];
+    struct node **pp = &sa[1];
+    struct node **sential = &sa[6];
+    struct node *p = begin;
+    do {
+        struct *node tp = *pp;
+        p->next = tp;
+        pp += 1;
+        p = tp;
+    } while (pp != sential);
+    tp->next = NULL;
+
+    for (i = 5; i--; i != 0) {
+        struct node *p = prev->next;
+        int magic = p->magic;
+        if prev.magic >= magic {
+            priv = prev.next
+        } else {
+            explode()
+        }
+    }
+}
+```
 
 ## 附录1：GDB Cheatsheet
 
